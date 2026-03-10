@@ -1,15 +1,20 @@
-// login.js - We Wealth: registrazione + lettura OTP da Gmail + notifica
+// login.js - We Wealth: registrazione con flusso OTP corretto
+// FLUSSO REALE:
+//   STEP 1 - Inserisce solo l'email nel primo campo e clicca Continua
+//   STEP 2 - We Wealth manda OTP all'email -> script lo legge da Gmail API
+//   STEP 3 - Inserisce l'OTP nella pagina e conferma
+//   STEP 4 - Compila il resto del form (nome, cognome, password, citta, ruolo)
+//   STEP 5 - Invia notifica di completamento a milanotoonight@gmail.com
+//
 // Dipendenze: npm install playwright nodemailer googleapis
 //
-// Variabili d'ambiente richieste:
-//   WW_PASSWORD     - password usata per la registrazione
-//   SMTP_USER       - email Gmail mittente per la notifica finale
-//   SMTP_PASS       - App Password Gmail del mittente
-//   GMAIL_CLIENT_ID     - Client ID OAuth2 Gmail API
-//   GMAIL_CLIENT_SECRET - Client Secret OAuth2 Gmail API
-//   GMAIL_REFRESH_TOKEN - Refresh Token OAuth2 (per riccardo.abrami@we-wealth.com)
-//
-// Esegui: node login.js
+// Variabili d'ambiente:
+//   WW_PASSWORD          - password per la registrazione
+//   SMTP_USER            - Gmail mittente per la notifica
+//   SMTP_PASS            - App Password Gmail mittente
+//   GMAIL_CLIENT_ID      - OAuth2 Client ID (account riccardo.abrami@we-wealth.com)
+//   GMAIL_CLIENT_SECRET  - OAuth2 Client Secret
+//   GMAIL_REFRESH_TOKEN  - OAuth2 Refresh Token
 
 const { chromium } = require('playwright');
 const nodemailer = require('nodemailer');
@@ -17,56 +22,47 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
 
-// ─── Genera numero casuale a 3 cifre ─────────────────────────────────────────
 function randomSuffix() {
   return String(Math.floor(Math.random() * 1000)).padStart(3, '0');
 }
 
-// ─── Salva log su file ────────────────────────────────────────────────────────
 function logEntry(text) {
   const logFile = path.join(__dirname, 'registrations.log');
-  const entry = new Date().toISOString() + ' - ' + text + '\n';
-  fs.appendFileSync(logFile, entry);
-  console.log(entry.trim());
+  fs.appendFileSync(logFile, new Date().toISOString() + ' - ' + text + '\n');
+  console.log(text);
 }
 
-// ─── Legge OTP dall'inbox Gmail di riccardo.abrami@we-wealth.com ──────────────
-// Usa Gmail API con OAuth2. Attende fino a 60 secondi che arrivi l'email con l'OTP.
+// Legge l'OTP dalla Gmail di riccardo.abrami@we-wealth.com via Gmail API
 async function getOtpFromGmail(afterTimestamp) {
   const oAuth2Client = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET
   );
-  oAuth2Client.setCredentials({
-    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
-  });
-
+  oAuth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
   const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-  const maxWaitMs = 60000; // attende max 60 secondi
-  const pollIntervalMs = 3000; // controlla ogni 3 secondi
+
+  const maxWaitMs = 60000;
+  const pollIntervalMs = 3000;
   const start = Date.now();
 
-  console.log('Attendo OTP via Gmail...');
+  console.log('In attesa OTP da Gmail (riccardo.abrami@we-wealth.com)...');
 
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, pollIntervalMs));
 
-    // Cerca email da We Wealth arrivate dopo l'inizio della registrazione
     const res = await gmail.users.messages.list({
       userId: 'me',
       q: 'from:we-wealth.com after:' + Math.floor(afterTimestamp / 1000),
       maxResults: 5,
     });
 
-    const messages = res.data.messages || [];
-    for (const msg of messages) {
+    for (const msg of (res.data.messages || [])) {
       const detail = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id,
         format: 'full',
       });
 
-      // Legge il corpo dell'email (plain text o HTML)
       let body = '';
       const parts = detail.data.payload.parts || [detail.data.payload];
       for (const part of parts) {
@@ -75,33 +71,24 @@ async function getOtpFromGmail(afterTimestamp) {
         }
       }
 
-      // Cerca un codice OTP: sequenza di 4-8 cifre
       const otpMatch = body.match(/\b(\d{4,8})\b/);
       if (otpMatch) {
         console.log('OTP trovato:', otpMatch[1]);
         return otpMatch[1];
       }
     }
-    console.log('OTP non ancora arrivato, riprovo...');
+    console.log('OTP non ancora arrivato, riprovo tra 3s...');
   }
 
   throw new Error('OTP non ricevuto entro 60 secondi');
 }
 
-// ─── Invia email di notifica finale ──────────────────────────────────────────
 async function sendNotification({ success, email, url, otp, error }) {
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const notifyEmail = 'milanotoonight@gmail.com';
-
-  if (!smtpUser || !smtpPass) {
-    console.warn('SMTP_USER o SMTP_PASS mancanti. Notifica non inviata.');
-    return;
-  }
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
   const transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: { user: smtpUser, pass: smtpPass },
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
 
   const stato = success ? 'SUCCESSO' : 'ERRORE';
@@ -110,31 +97,27 @@ async function sendNotification({ success, email, url, otp, error }) {
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
-      <h2 style="background:${colore};color:#fff;padding:12px 20px;border-radius:6px;margin:0">
-        ATM Bot - ${stato}
-      </h2>
+      <h2 style="background:${colore};color:#fff;padding:12px 20px;border-radius:6px;margin:0">ATM Bot - ${stato}</h2>
       <table style="width:100%;border-collapse:collapse;margin-top:10px">
         <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Timestamp</b></td><td style="padding:8px;border-bottom:1px solid #eee">${timestamp}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Email registrata</b></td><td style="padding:8px;border-bottom:1px solid #eee">${email}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>OTP utilizzato</b></td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:18px;letter-spacing:3px">${otp || '-'}</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>OTP utilizzato</b></td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:20px;letter-spacing:4px">${otp || '-'}</td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>URL finale</b></td><td style="padding:8px;border-bottom:1px solid #eee">${url || '-'}</td></tr>
         ${error ? '<tr><td style="padding:8px;color:#e74c3c"><b>Errore</b></td><td style="padding:8px;color:#e74c3c">' + error + '</td></tr>' : ''}
       </table>
       <p style="color:#aaa;font-size:11px;margin-top:16px">Generato automaticamente da ATM Bot</p>
-    </div>
-  `;
+    </div>`;
 
   await transporter.sendMail({
-    from: smtpUser,
-    to: notifyEmail,
+    from: process.env.SMTP_USER,
+    to: 'milanotoonight@gmail.com',
     subject: `[ATM Bot] Registrazione We Wealth - ${stato} | ${email}`,
     html,
   });
-
-  console.log('Email di notifica inviata a:', notifyEmail);
+  console.log('Notifica inviata a milanotoonight@gmail.com');
 }
 
-// ─── Script principale ────────────────────────────────────────────────────────
+// SCRIPT PRINCIPALE
 (async () => {
   const suffix = randomSuffix();
   const email = 'riccardo.abrami+' + suffix + '@we-wealth.com';
@@ -150,39 +133,52 @@ async function sendNotification({ success, email, url, otp, error }) {
   const page = await context.newPage();
 
   try {
-    // 1. Apre pagina di registrazione
     await page.goto('https://www.we-wealth.com/en/registrazione');
-    await page.waitForSelector('#fname', { state: 'visible' });
 
-    // 2. Compila il form
-    await page.fill('#fname', 'Riccardo');
-    await page.fill('#lname', 'Abrami');
+    // ── STEP 1: inserisce solo l'email nel primo campo ──────────────────────
+    console.log('STEP 1 - Inserimento email...');
+    await page.waitForSelector('#email', { state: 'visible' });
     await page.fill('#email', email);
-    await page.fill('#password', password);
-    await page.fill('#city', 'Milano');
-    await page.selectOption('#role', 'Investor');
-    await page.check('#terms');
 
-    // 3. Invia il form (We Wealth manda OTP a riccardo.abrami@we-wealth.com)
-    console.log('Invio form - We Wealth inviera OTP a riccardo.abrami@we-wealth.com...');
-    await page.click('button:has-text("Sign Up")');
+    // Clicca il bottone che attiva l'invio OTP (Next / Continua / Verifica)
+    // Usa un selettore generico che cattura il primo bottone submit/next visibile
+    await page.click('button[type="submit"], button:has-text("Next"), button:has-text("Continua"), button:has-text("Verifica"), button:has-text("Sign Up")');
 
-    // 4. Legge l'OTP dalla Gmail di riccardo.abrami@we-wealth.com
+    // ── STEP 2: legge l'OTP dalla Gmail ────────────────────────────────────
+    console.log('STEP 2 - Lettura OTP da Gmail...');
     otp = await getOtpFromGmail(startTime);
     logEntry('OTP ricevuto: ' + otp);
 
-    // 5. Inserisce l'OTP nella pagina (attende il campo OTP)
-    await page.waitForSelector('input[name="otp"], input[type="number"], input[placeholder*="OTP"], input[placeholder*="code"], input[placeholder*="codice"]', { state: 'visible', timeout: 15000 });
-    await page.fill('input[name="otp"], input[type="number"], input[placeholder*="OTP"], input[placeholder*="code"], input[placeholder*="codice"]', otp);
+    // ── STEP 3: inserisce l'OTP nel campo che appare ────────────────────────
+    console.log('STEP 3 - Inserimento OTP nella pagina...');
+    await page.waitForSelector(
+      'input[name="otp"], input[id="otp"], input[placeholder*="OTP"], input[placeholder*="codice"], input[placeholder*="code"], input[placeholder*="verif"]',
+      { state: 'visible', timeout: 20000 }
+    );
+    await page.fill(
+      'input[name="otp"], input[id="otp"], input[placeholder*="OTP"], input[placeholder*="codice"], input[placeholder*="code"], input[placeholder*="verif"]',
+      otp
+    );
+    await page.click('button[type="submit"]');
+    await page.waitForTimeout(2000);
 
-    // 6. Conferma l'OTP
+    // ── STEP 4: compila il resto del form ──────────────────────────────────
+    console.log('STEP 4 - Compilazione form completo...');
+    await page.waitForSelector('#fname', { state: 'visible', timeout: 10000 }).catch(() => {});
+    if (await page.$('#fname')) await page.fill('#fname', 'Riccardo');
+    if (await page.$('#lname')) await page.fill('#lname', 'Abrami');
+    if (await page.$('#password')) await page.fill('#password', password);
+    if (await page.$('#city')) await page.fill('#city', 'Milano');
+    if (await page.$('#role')) await page.selectOption('#role', 'Investor');
+    if (await page.$('#terms')) await page.check('#terms');
+
     await page.click('button[type="submit"]');
     await page.waitForTimeout(4000);
 
     currentUrl = page.url();
     logEntry('Registrazione completata. URL: ' + currentUrl);
 
-    // 7. Invia email di notifica SUCCESSO
+    // ── STEP 5: notifica successo ──────────────────────────────────────────
     await sendNotification({ success: true, email, url: currentUrl, otp });
 
   } catch (err) {
