@@ -1,15 +1,14 @@
-// login.js - We Wealth: flusso OTP reale (v3 - fix selettore pulsante Accedi)
-// FLUSSO REALE:
-//   STEP 1 - Vai su we-wealth.com e aspetta networkidle
-//   STEP 2 - Clicca il pulsante Accedi via JS evaluate (selettore href="/#")
-//            -> Si apre popup "Entra in We Wealth"
-//   STEP 3 - Clicca "ACCEDI O REGISTRATI"
-//            -> Mostra campo email "Inserisci la tua email"
+// login.js - We Wealth: flusso OTP reale (v4 - fix cookie banner + selettore corretto)
+// FLUSSO REALE (dai log del run #5):
+//   STEP 1 - Carica we-wealth.com (networkidle)
+//   STEP 2 - Clicca icona utente via JS -> apre popup
+//   STEP 2b - DISMISSI BANNER COOKIE (bloccava il click)
+//   STEP 3 - Clicca #otp-submit-button ("Accedi o registrati")
 //   STEP 4 - Inserisci email riccardo.abrami+XXX@we-wealth.com
-//   STEP 5 - Clicca "INVIA CODICE VIA EMAIL"
+//   STEP 5 - Clicca INVIA CODICE VIA EMAIL
 //   STEP 6 - Legge OTP da Gmail API
 //   STEP 7 - Inserisce OTP nel campo popup
-//   STEP 8 - Completa profilo e manda notifica a milanotoonight@gmail.com
+//   STEP 8 - Manda notifica a milanotoonight@gmail.com
 
 const { chromium } = require('playwright');
 const nodemailer = require('nodemailer');
@@ -126,7 +125,7 @@ async function sendNotification({ success, email, url, otp, error }) {
   const page = await context.newPage();
 
   try {
-    // STEP 1 - Carica we-wealth.com aspettando che la pagina sia pronta
+    // STEP 1 - Carica we-wealth.com
     console.log('STEP 1 - Caricamento we-wealth.com...');
     await page.goto('https://www.we-wealth.com', {
       waitUntil: 'networkidle',
@@ -134,28 +133,37 @@ async function sendNotification({ success, email, url, otp, error }) {
     });
     console.log('Pagina caricata, URL: ' + page.url());
 
-    // STEP 2 - Clicca il pulsante Accedi tramite JavaScript per massima robustezza
-    console.log('STEP 2 - Click pulsante Accedi via JavaScript...');
+    // STEP 2 - Clicca pulsante Accedi (icona utente) via JS
+    console.log('STEP 2 - Click pulsante Accedi...');
     await page.evaluate(() => {
-      // Prova prima la classe otp-popup-button
       const btn = document.querySelector('a.otp-popup-button') ||
                   document.querySelector('a[href="/#"]') ||
                   document.querySelector('a[href="#"]');
       if (btn) btn.click();
-      else throw new Error('Pulsante Accedi non trovato nel DOM');
+      else throw new Error('Pulsante Accedi non trovato');
     });
-    await page.waitForTimeout(2000);
-
-    // Verifica che il popup sia apparso
-    console.log('STEP 2b - Attesa popup "Entra in We Wealth"...');
-    await page.waitForSelector('text=ACCEDI O REGISTRATI', { state: 'visible', timeout: 10000 });
-
-    // Clicca ACCEDI O REGISTRATI
-    await page.click('text=ACCEDI O REGISTRATI');
     await page.waitForTimeout(1500);
 
-    // STEP 3 - Inserisci email nel campo del popup
-    console.log('STEP 3 - Inserimento email: ' + email);
+    // STEP 2b - CHIUDI BANNER COOKIE se presente (bloccava il click successivo)
+    console.log('STEP 2b - Chiusura banner cookie...');
+    try {
+      await page.click(
+        'button:has-text("Accetta"), button:has-text("Accetto"), button:has-text("Accept"), button:has-text("Chiudi"), button:has-text("OK"), #CybotCookiebotDialogBodyButtonAccept, .cc-accept, [aria-label*="cookie" i], .cookie-accept',
+        { timeout: 5000 }
+      );
+      console.log('Banner cookie chiuso.');
+      await page.waitForTimeout(1000);
+    } catch (_) {
+      console.log('Nessun banner cookie trovato, procedo.');
+    }
+
+    // STEP 3 - Clicca "Accedi o registrati" (id=otp-submit-button, data-step=2)
+    console.log('STEP 3 - Click Accedi o registrati...');
+    await page.click('#otp-submit-button', { timeout: 10000 });
+    await page.waitForTimeout(1500);
+
+    // STEP 4 - Inserisci email nel campo del popup
+    console.log('STEP 4 - Inserimento email: ' + email);
     await page.waitForSelector(
       'input[type="email"], input[placeholder*="mail"], input[placeholder*="Mail"]',
       { state: 'visible', timeout: 15000 }
@@ -166,18 +174,18 @@ async function sendNotification({ success, email, url, otp, error }) {
     );
     await page.waitForTimeout(500);
 
-    // STEP 4 - Clicca INVIA CODICE VIA EMAIL
-    console.log('STEP 4 - Click INVIA CODICE VIA EMAIL...');
+    // STEP 5 - Clicca INVIA CODICE VIA EMAIL
+    console.log('STEP 5 - Click INVIA CODICE VIA EMAIL...');
     await page.click('text=INVIA CODICE VIA EMAIL');
     await page.waitForTimeout(3000);
 
-    // STEP 5 - Leggi OTP da Gmail
-    console.log('STEP 5 - Lettura OTP da Gmail...');
+    // STEP 6 - Leggi OTP da Gmail
+    console.log('STEP 6 - Lettura OTP da Gmail...');
     otp = await getOtpFromGmail(startTime);
     logEntry('OTP ricevuto: ' + otp);
 
-    // STEP 6 - Inserisci OTP nel popup
-    console.log('STEP 6 - Inserimento OTP: ' + otp);
+    // STEP 7 - Inserisci OTP nel popup
+    console.log('STEP 7 - Inserimento OTP: ' + otp);
     const otpSelector = 'input[type="number"], input[name="otp"], input[id="otp"], input[maxlength="6"], input[maxlength="4"], input[maxlength="8"], input[placeholder*="codice"], input[placeholder*="OTP"], input[placeholder*="code"]';
     await page.waitForSelector(otpSelector, { state: 'visible', timeout: 30000 });
     await page.fill(otpSelector, otp);
@@ -195,7 +203,7 @@ async function sendNotification({ success, email, url, otp, error }) {
     currentUrl = page.url();
     logEntry('Completato. URL finale: ' + currentUrl);
 
-    // STEP 7 - Notifica
+    // STEP 8 - Notifica
     await sendNotification({ success: true, email, url: currentUrl, otp });
 
   } catch (err) {
