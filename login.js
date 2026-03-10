@@ -1,17 +1,15 @@
-// login.js - We Wealth: flusso OTP reale
-// FLUSSO REALE (scoperto ispezionando il sito):
-//
-//   STEP 1 - Vai su we-wealth.com
-//   STEP 2 - Clicca icona utente in alto a destra (link .otp-popup-button o href="/#")
+// login.js - We Wealth: flusso OTP reale (v3 - fix selettore pulsante Accedi)
+// FLUSSO REALE:
+//   STEP 1 - Vai su we-wealth.com e aspetta networkidle
+//   STEP 2 - Clicca il pulsante Accedi via JS evaluate (selettore href="/#")
 //            -> Si apre popup "Entra in We Wealth"
 //   STEP 3 - Clicca "ACCEDI O REGISTRATI"
-//            -> Mostra campo email: "Inserisci la tua email"
-//   STEP 4 - Inserisci riccardo.abrami+XXX@we-wealth.com e clicca "INVIA CODICE VIA EMAIL"
-//            -> We Wealth manda OTP all'email riccardo.abrami@we-wealth.com
-//   STEP 5 - Script legge OTP da Gmail API (account riccardo.abrami@we-wealth.com)
-//   STEP 6 - Inserisce OTP nel campo del popup
-//   STEP 7 - Completa registrazione (nome, cognome, ruolo, termini)
-//   STEP 8 - Invia notifica a milanotoonight@gmail.com
+//            -> Mostra campo email "Inserisci la tua email"
+//   STEP 4 - Inserisci email riccardo.abrami+XXX@we-wealth.com
+//   STEP 5 - Clicca "INVIA CODICE VIA EMAIL"
+//   STEP 6 - Legge OTP da Gmail API
+//   STEP 7 - Inserisce OTP nel campo popup
+//   STEP 8 - Completa profilo e manda notifica a milanotoonight@gmail.com
 
 const { chromium } = require('playwright');
 const nodemailer = require('nodemailer');
@@ -57,16 +55,15 @@ async function getOtpFromGmail(afterTimestamp) {
           format: 'full'
         });
         let body = '';
-        const payload = detail.data.payload;
         const extractBody = (parts) => {
-          for (const part of parts) {
+          for (const part of (parts || [])) {
             if (part.body && part.body.data) {
               body += Buffer.from(part.body.data, 'base64').toString('utf-8');
             }
             if (part.parts) extractBody(part.parts);
           }
         };
-        extractBody(payload.parts || [payload]);
+        extractBody(detail.data.payload.parts || [detail.data.payload]);
         const otpMatch = body.match(/\b(\d{4,8})\b/);
         if (otpMatch) {
           console.log('OTP trovato:', otpMatch[1]);
@@ -94,8 +91,8 @@ async function sendNotification({ success, email, url, otp, error }) {
   <h2 style="background:${colore};color:#fff;padding:12px 20px;border-radius:6px">ATM Bot - ${stato}</h2>
   <table style="width:100%;border-collapse:collapse">
     <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Timestamp</b></td><td style="padding:8px;border-bottom:1px solid #eee">${timestamp}</td></tr>
-    <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Email registrata</b></td><td style="padding:8px;border-bottom:1px solid #eee">${email}</td></tr>
-    <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>OTP usato</b></td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:20px;letter-spacing:4px">${otp || '-'}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Email</b></td><td style="padding:8px;border-bottom:1px solid #eee">${email}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>OTP</b></td><td style="padding:8px;border-bottom:1px solid #eee;font-weight:bold;font-size:20px;letter-spacing:4px">${otp || '-'}</td></tr>
     <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>URL finale</b></td><td style="padding:8px;border-bottom:1px solid #eee">${url || '-'}</td></tr>
     ${error ? '<tr><td style="padding:8px;color:#e74c3c"><b>Errore</b></td><td style="padding:8px;color:#e74c3c">' + error + '</td></tr>' : ''}
   </table>
@@ -120,91 +117,85 @@ async function sendNotification({ success, email, url, otp, error }) {
 
   const browser = await chromium.launch({
     headless: process.env.PLAYWRIGHT_HEADLESS === 'true',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  });
   const page = await context.newPage();
 
   try {
-    // STEP 1 - Vai su we-wealth.com
+    // STEP 1 - Carica we-wealth.com aspettando che la pagina sia pronta
     console.log('STEP 1 - Caricamento we-wealth.com...');
     await page.goto('https://www.we-wealth.com', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'networkidle',
       timeout: 60000,
+    });
+    console.log('Pagina caricata, URL: ' + page.url());
+
+    // STEP 2 - Clicca il pulsante Accedi tramite JavaScript per massima robustezza
+    console.log('STEP 2 - Click pulsante Accedi via JavaScript...');
+    await page.evaluate(() => {
+      // Prova prima la classe otp-popup-button
+      const btn = document.querySelector('a.otp-popup-button') ||
+                  document.querySelector('a[href="/#"]') ||
+                  document.querySelector('a[href="#"]');
+      if (btn) btn.click();
+      else throw new Error('Pulsante Accedi non trovato nel DOM');
     });
     await page.waitForTimeout(2000);
 
-    // STEP 2 - Clicca il pulsante Accedi (icona utente / otp-popup-button)
-    console.log('STEP 2 - Click pulsante Accedi...');
-    await page.click('a.otp-popup-button, a[href="/#"]');
-    await page.waitForTimeout(1500);
+    // Verifica che il popup sia apparso
+    console.log('STEP 2b - Attesa popup "Entra in We Wealth"...');
+    await page.waitForSelector('text=ACCEDI O REGISTRATI', { state: 'visible', timeout: 10000 });
 
-    // Nel primo popup clicca "ACCEDI O REGISTRATI"
-    console.log('STEP 2b - Click ACCEDI O REGISTRATI...');
+    // Clicca ACCEDI O REGISTRATI
     await page.click('text=ACCEDI O REGISTRATI');
     await page.waitForTimeout(1500);
 
-    // STEP 3 - Inserisci email univoca
+    // STEP 3 - Inserisci email nel campo del popup
     console.log('STEP 3 - Inserimento email: ' + email);
-    const emailField = await page.waitForSelector(
-      'input[type="email"], input[name="email"], input[placeholder*="email"], input[placeholder*="Email"]',
+    await page.waitForSelector(
+      'input[type="email"], input[placeholder*="mail"], input[placeholder*="Mail"]',
       { state: 'visible', timeout: 15000 }
     );
-    await emailField.fill(email);
+    await page.fill(
+      'input[type="email"], input[placeholder*="mail"], input[placeholder*="Mail"]',
+      email
+    );
     await page.waitForTimeout(500);
 
-    // Clicca "INVIA CODICE VIA EMAIL"
-    console.log('STEP 3b - Click INVIA CODICE VIA EMAIL...');
+    // STEP 4 - Clicca INVIA CODICE VIA EMAIL
+    console.log('STEP 4 - Click INVIA CODICE VIA EMAIL...');
     await page.click('text=INVIA CODICE VIA EMAIL');
     await page.waitForTimeout(3000);
 
-    // STEP 4+5 - Leggi OTP da Gmail
-    console.log('STEP 4 - Lettura OTP da Gmail...');
+    // STEP 5 - Leggi OTP da Gmail
+    console.log('STEP 5 - Lettura OTP da Gmail...');
     otp = await getOtpFromGmail(startTime);
     logEntry('OTP ricevuto: ' + otp);
 
     // STEP 6 - Inserisci OTP nel popup
-    console.log('STEP 5 - Inserimento OTP nel popup...');
-    const otpField = await page.waitForSelector(
-      'input[type="number"], input[name="otp"], input[id="otp"], input[maxlength], input[placeholder*="codice"], input[placeholder*="OTP"], input[placeholder*="code"]',
-      { state: 'visible', timeout: 30000 }
-    );
-    await otpField.fill(otp);
+    console.log('STEP 6 - Inserimento OTP: ' + otp);
+    const otpSelector = 'input[type="number"], input[name="otp"], input[id="otp"], input[maxlength="6"], input[maxlength="4"], input[maxlength="8"], input[placeholder*="codice"], input[placeholder*="OTP"], input[placeholder*="code"]';
+    await page.waitForSelector(otpSelector, { state: 'visible', timeout: 30000 });
+    await page.fill(otpSelector, otp);
     await page.waitForTimeout(500);
 
-    // Clicca il pulsante di conferma OTP
-    await page.click('button[type="submit"], text=CONFERMA, text=VERIFICA, text=CONTINUA');
-    await page.waitForTimeout(3000);
-
-    // STEP 7 - Completa registrazione (potrebbero apparire campi extra)
-    console.log('STEP 6 - Completamento registrazione...');
-    currentUrl = page.url();
-
-    // Compila eventuali campi aggiuntivi del profilo
-    const fnameField = page.$('input[name="first_name"], input[id="fname"], input[placeholder*="nome"], input[placeholder*="Nome"]');
-    if (await fnameField) await (await fnameField).fill('Riccardo');
-
-    const lnameField = page.$('input[name="last_name"], input[id="lname"], input[placeholder*="cognome"], input[placeholder*="Cognome"]');
-    if (await lnameField) await (await lnameField).fill('Abrami');
-
-    // Accetta termini se visibili
-    const termsCheck = page.$('input[type="checkbox"]');
-    if (await termsCheck) {
-      const checked = await (await termsCheck).isChecked();
-      if (!checked) await (await termsCheck).check();
-    }
-
-    // Clicca eventuale pulsante di completamento
-    try {
-      await page.click('button[type="submit"], text=SALVA, text=COMPLETA, text=CONFERMA', { timeout: 5000 });
-      await page.waitForTimeout(3000);
-    } catch (_) {
-      console.log('Nessun pulsante finale da cliccare.');
-    }
+    // Clicca conferma OTP
+    await page.evaluate(() => {
+      const btns = [...document.querySelectorAll('button')];
+      const btn = btns.find(b => /conferma|verifica|continua|avanti|invia/i.test(b.textContent));
+      if (btn) btn.click();
+      else document.querySelector('button[type="submit"]')?.click();
+    });
+    await page.waitForTimeout(4000);
 
     currentUrl = page.url();
     logEntry('Completato. URL finale: ' + currentUrl);
 
-    // STEP 8 - Notifica email
+    // STEP 7 - Notifica
     await sendNotification({ success: true, email, url: currentUrl, otp });
 
   } catch (err) {
