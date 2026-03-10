@@ -44,7 +44,18 @@ async function getOtpFromGmail(afterTimestamp) {
         pass: process.env.GMAIL_APP_PASSWORD,
       },
       logger: false,
+        connectionTimeout: 120000,
+        greetingTimeout: 30000,
+        socketTimeout: 300000
     });
+
+        client.on('error', err => {
+                console.error('IMAP error:', err.message, err.code);
+              });
+
+        client.on('close', () => {
+                console.error('IMAP connection closed');
+              });
     try {
       await client.connect();
       await client.mailboxOpen('INBOX');
