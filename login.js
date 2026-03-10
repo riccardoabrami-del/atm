@@ -104,7 +104,7 @@ async function sendNotification({ success, email, url, otp, error }) {
   try {
     // Carica la pagina e aspetta che sia completamente pronta
     await page.goto('https://www.we-wealth.com/en/registrazione', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
 
