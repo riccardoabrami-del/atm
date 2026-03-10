@@ -128,7 +128,7 @@ async function sendNotification({ success, email, url, otp, error }) {
 
   logEntry('Inizio registrazione - email: ' + email);
 
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({ headless: process.env.PLAYWRIGHT_HEADLESS === 'true' });
   const context = await browser.newContext();
   const page = await context.newPage();
 
