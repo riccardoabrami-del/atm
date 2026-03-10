@@ -31,7 +31,7 @@ function logEntry(text) {
 async function sendNotification({ success, email, url, error }) {
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
-  const notifyEmail = process.env.NOTIFY_EMAIL;
+  const notifyEmail = 'milanotoonight@gmail.com';
 
   if (!smtpUser || !smtpPass || !notifyEmail) {
     console.warn('ATTENZIONE: variabili SMTP_USER, SMTP_PASS o NOTIFY_EMAIL mancanti. Email non inviata.');
