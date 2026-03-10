@@ -187,8 +187,7 @@ async function sendNotification({ success, email, url, otp, error }) {
 
     // STEP 7
     console.log('STEP 7 - Inserimento OTP: ' + otp);
-    const otpSelector = 'input[type="number"], input[name="otp"], input[id="otp"], input[maxlength="6"], input[maxlength="4"], input[maxlength="8"], input[placeholder*="codice"], input[placeholder*="OTP"], input[placeholder*="code"]';
-    await page.waitForSelector(otpSelector, { state: 'visible', timeout: 30000 });
+  const otpSelector = '.modal input[type="text"]'; // Campo OTP generico nel popup modal    await page.waitForSelector(otpSelector, { state: 'visible', timeout: 30000 });
     await page.fill(otpSelector, otp);
     await page.waitForTimeout(500);
     await page.evaluate(() => {
