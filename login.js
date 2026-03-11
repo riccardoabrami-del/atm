@@ -175,14 +175,16 @@ async function sendNotification({ success, email, url, otp, error }) {
     );
     await page.waitForTimeout(500);
 
+    
     // STEP 5
-    console.log('STEP 5 - Click INVIA CODICE VIA EMAIL...');
-    await page.click('text=INVIA CODICE VIA EMAIL');
-    await page.waitForTimeout(3000);
+    console.log('STEP 5 - Click ...');
+    await page.click('text=');
+    const otpRequestTime = Date.now();
+await page.waitForTimeout(3000);
 
     // STEP 6
     console.log('STEP 6 - Lettura OTP da Gmail...');
-    otp = await getOtpFromGmail(startTime);
+    otp = await getOtpFromGmail(otRequestTime);
     logEntry('OTP ricevuto: ' + otp);
 
     // STEP 7
