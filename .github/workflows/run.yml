@@ -16,7 +16,7 @@ jobs:
           node-version: '20'
 
       - name: Installa dipendenze
-        run: npm install playwright nodemailer imapflow mailparser
+        run: npm install playwright nodemailer imapflow mailparser puppeteer
 
       - name: Installa Chromium
         run: npx playwright install chromium --with-deps
