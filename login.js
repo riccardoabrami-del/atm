@@ -19,7 +19,24 @@ const puppeteer = require('puppeteer');
   }
 
   // Step 2: Wait for 'Accedi' button and click
+   
   try {
+      await page.waitForSelector('a[title="Accedi"]', { timeout: 60000 });
+      await page.click('a[title="Accedi"]');
+  } catch (err) {
+      console.error('Could not find or click the Accedi link:', err);
+  }
+
+  // Step 2.b: Wait for 'Accedi o registrati' button and click
+  try {
+      await page.waitForSelector('button#otp-submit-button', { timeout: 60000 });
+      await page.click('button#otp-submit-button');
+  } catch (err) {
+      console.error('Could not find or click the Accedi o registrati button:', err);
+    // Close the browser
+  await browser.close();
+})();
+
     await page.waitForSelector('a.btn-accedi.otp-popup-button', { timeout: 60000 });
     await page.click('a.btn-accedi.otp-popup-button');
   } catch (err) {
