@@ -2,7 +2,6 @@
 // FLUSSO REALE:
 //   STEP 1 - Carica we-wealth.com (networkidle)
 //   STEP 2 - Clicca icona utente via JS -> apre popup
-//   STEP 2b - DISMISSI BANNER COOKIE
 //   STEP 3 - Clicca #otp-submit-button ("Accedi o registrati")
 //   STEP 4 - Inserisci email riccardo.abrami+XXX@we-wealth.com
 //   STEP 5 - Clicca INVIA CODICE VIA EMAIL
@@ -145,21 +144,37 @@ try {
   console.log('Nessun banner cookie trovato entro 10 secondi, procedo.');
 }
 
-// STEP 2 - click personcina
-console.log('STEP 2 - Click pulsante Accedi...');
-const loginButtons = page.locator('a.otp-popup-button');
-console.log('Numero pulsanti Accedi trovati:', await loginButtons.count());
+console.log('STEP 2 - Attendo pulsante Accedi...');
 
-const loginButton = loginButtons.nth(1);
+await page.waitForSelector('#masthead a.btn-accedi.otp-popup-button[title="Accedi"]', {
+  timeout: 20000
+});
+
+const loginButton = page.locator('#masthead a.btn-accedi.otp-popup-button[title="Accedi"]').first();
+
 await loginButton.waitFor({ state: 'visible', timeout: 15000 });
 await loginButton.click({ force: true });
+
+console.log('Click effettuato sul pulsante Accedi');
 await page.waitForTimeout(2000);
 
 // controllo popup
 console.log('Popup aperto, verifico campo email...');
 await page.locator('input[type="email"]').first().waitFor({ state: 'visible', timeout: 15000 });
 
-// STEP 3 - inserimento email
+console.log('STEP 2 - Attendo pulsante Accedi...');
+
+await page.waitForSelector('#masthead a.btn-accedi.otp-popup-button[title="Accedi"]', {
+  timeout: 20000
+});
+
+const loginButton = page.locator('#masthead a.btn-accedi.otp-popup-button[title="Accedi"]').first();
+
+await loginButton.waitFor({ state: 'visible', timeout: 15000 });
+await loginButton.click({ force: true });
+
+console.log('Click effettuato sul pulsante Accedi');
+await page.waitForTimeout(2000);
 console.log('STEP 3 - Inserimento email: ' + email);
 
 const emailInput = page.locator('input[type="email"]').first();
