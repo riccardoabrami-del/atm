@@ -163,23 +163,51 @@ async function sendNotification({ success, email, url, otp, error }) {
     await page.click('#otp-submit-button', { timeout: 10000 });
     await page.waitForTimeout(1500);
 
-    // STEP 4
-    console.log('STEP 4 - Inserimento email: ' + email);
-    await page.waitForSelector(
-      'input[type="email"], input[placeholder*="mail"], input[placeholder*="Mail"]',
-      { state: 'visible', timeout: 15000 }
-    );
-    await page.fill(
-      'input[type="email"], input[placeholder*="mail"], input[placeholder*="Mail"]',
-      email
-    );
-    await page.waitForTimeout(500);
+// STEP 4
+console.log('STEP 4 - Inserimento email: ' + email);
 
-    // STEP 5
-console.log('STEP 5 - Click INVIA CODICE VIA EMAIL...');
-await page.click('text=INVIA CODICE VIA EMAIL');
+const emailInput = page.locator('input[type="email"]').first();
+await emailInput.waitFor({ state: 'visible', timeout: 15000 });
+
+// click nel campo
+await emailInput.click({ force: true });
+
+// svuota completamente il campo
+await emailInput.fill('');
+await emailInput.press('Control+A');
+await emailInput.press('Backspace');
+
+// scrive la mail
+await emailInput.type(email, { delay: 40 });
+
+// forza anche via JS il valore corretto
+await page.evaluate((val) => {
+  const el = document.querySelector('input[type="email"]');
+  if (el) {
+    el.value = val;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+}, email);
+
+// controllo finale
+const insertedValue = await emailInput.inputValue();
+console.log('Valore presente nel campo email:', insertedValue);
+
+if (insertedValue.trim().toLowerCase() !== email.trim().toLowerCase()) {
+  throw new Error(`Email non inserita correttamente. Atteso: ${email}, trovato: ${insertedValue}`);
+}
+
+// STEP 5
+console.log('STEP 5 - Click SEND CODE BY EMAIL...');
+
+const sendButton = page.locator('button:has-text("SEND CODE BY EMAIL")').first();
+await sendButton.waitFor({ state: 'visible', timeout: 10000 });
+await sendButton.click({ force: true });
+
 const otpRequestTime = Date.now();
-await page.waitForTimeout(3000);
+await page.waitForTimeout(5000);
 
 // STEP 6
 console.log('STEP 6 - Lettura OTP da Gmail...');
