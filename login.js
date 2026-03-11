@@ -1,40 +1,52 @@
-// VERSIONE NUOVA LOGINJS 11 MARZO
-// login.js - We Wealth OTP flow adattato al flusso reale del sito
+(async () => {
 
-const { chromium } = require('playwright');
-const nodemailer = require('nodemailer');
-const { ImapFlow } = require('imapflow');
-const { simpleParser } = require('mailparser');
-const fs = require('fs');
-const path = require('path');
+  const { chromium } = require('playwright');
 
-function logEntry(text) {
-  const logFile = path.join(__dirname, 'registrations.log');
-  fs.appendFileSync(logFile, new Date().toISOString() + ' - ' + text + '\n');
-  console.log(text);
-}
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
 
-async function getOtpFromGmail(afterTimestamp) {
-  const maxWaitMs = 120000;
-  const pollIntervalMs = 8000;
-  const start = Date.now();
+  const page = await browser.newPage();
 
-  console.log('In attesa OTP da Gmail via IMAP...');
+  // STEP 1
+  console.log('STEP 1 - Visito we-wealth.com');
 
-  while (Date.now() - start < maxWaitMs) {
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  await page.goto('https://www.we-wealth.com', {
+    waitUntil: 'networkidle',
+    timeout: 60000
+  });
 
-    const client = new ImapFlow({
-      host: 'imap.gmail.com',
-      port: 993,
-      secure: true,
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-      logger: false,
-      connectionTimeout: 120000,
-      greetingTimeout: 30000,
+  console.log('Pagina caricata:', page.url());
+
+  // STEP 1b
+  console.log('STEP 1b - Attendo 20 secondi per i cookie');
+
+  await page.waitForTimeout(20000);
+
+  try {
+
+    const cookieButton = page.locator(
+      'button:has-text("Accetta"), button:has-text("Accetto"), button:has-text("Accept"), #CybotCookiebotDialogBodyButtonAccept'
+    ).first();
+
+    await cookieButton.waitFor({ state: 'visible', timeout: 5000 });
+
+    await cookieButton.click({ force: true });
+
+    console.log('Cookie accettati');
+
+  } catch (e) {
+
+    console.log('Banner cookie non trovato');
+
+  }
+
+  await page.waitForTimeout(5000);
+
+  await browser.close();
+
+})();      greetingTimeout: 30000,
       socketTimeout: 300000,
     });
 
