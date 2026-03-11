@@ -200,11 +200,12 @@ if (insertedValue.trim().toLowerCase() !== email.trim().toLowerCase()) {
 }
 
 // STEP 5
-console.log('STEP 5 - Click SEND CODE BY EMAIL...');
+console.log('STEP 5 - Click INVIA CODICE VIA EMAIL...');
 
-const sendButton = page.locator('button:has-text("SEND CODE BY EMAIL")').first();
-await sendButton.waitFor({ state: 'visible', timeout: 10000 });
-await sendButton.click({ force: true });
+const sendButton = page.locator('#otp-start-process');
+
+await sendButton.waitFor({ state: 'visible', timeout: 15000 });
+await sendButton.click();
 
 const otpRequestTime = Date.now();
 await page.waitForTimeout(5000);
