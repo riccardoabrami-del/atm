@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 
 (async () => {
-  const browser = await puppeteer.launch({ headless true , args: ['--no-sandbox']});
+  const browser = await puppeteer.launch({ headless: true , args: ['--no-sandbox']});
   const page = await browser.newPage();
   // Navigate to we-wealth.com
   await page.goto('https://www.we-wealth.com');
