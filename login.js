@@ -129,58 +129,46 @@ async function sendNotification({ success, email, url, otp, error }) {
   });
   const page = await context.newPage();
   try {
-    // STEP 1
-    console.log('STEP 1 - Caricamento we-wealth.com...');
-    await page.goto('https://www.we-wealth.com', { waitUntil: 'networkidle', timeout: 60000 });
-    console.log('Pagina caricata, URL: ' + page.url());
+   // STEP 1
+console.log('STEP 1 - Caricamento we-wealth.com...');
+await page.goto('https://www.we-wealth.com', {
+  waitUntil: 'networkidle',
+  timeout: 60000
+});
+console.log('Pagina caricata, URL: ' + page.url());
 
-    // STEP 2 - Clicca pulsante Accedi via JS
-    console.log('STEP 2 - Click pulsante Accedi...');
-    await page.evaluate(() => {
-      const btn = document.querySelector('a.otp-popup-button') ||
-        document.querySelector('a[href="/#"]') ||
-        document.querySelector('a[href="#"]');
-      if (btn) btn.click();
-      else throw new Error('Pulsante Accedi non trovato');
-    });
-    await page.waitForTimeout(1500);
+// STEP 2 - click personcina
+console.log('STEP 2 - Click pulsante Accedi...');
+const loginButton = page.locator('a.otp-popup-button');
+await loginButton.waitFor({ state: 'visible', timeout: 15000 });
+await loginButton.click({ force: true });
 
-    // STEP 2b - Chiudi banner cookie
-    console.log('STEP 2b - Chiusura banner cookie...');
-    try {
-      await page.click(
-        'button:has-text("Accetta"), button:has-text("Accetto"), button:has-text("Accept"), button:has-text("Chiudi"), button:has-text("OK"), #CybotCookiebotDialogBodyButtonAccept, .cc-accept, [aria-label*="cookie" i], .cookie-accept',
-        { timeout: 5000 }
-      );
-      console.log('Banner cookie chiuso.');
-      await page.waitForTimeout(1000);
-    } catch (_) {
-      console.log('Nessun banner cookie trovato, procedo.');
-    }
+await page.waitForTimeout(2000);
 
-    // STEP 3
-    console.log('STEP 3 - Click Accedi o registrati...');
-    await page.click('#otp-submit-button', { timeout: 10000 });
-    await page.waitForTimeout(1500);
+// STEP 2b - chiusura cookie se presente
+console.log('STEP 2b - Chiusura banner cookie...');
+try {
+  await page.click(
+    'button:has-text("Accetta"), button:has-text("Accetto"), button:has-text("Accept"), button:has-text("Chiudi"), button:has-text("OK"), #CybotCookiebotDialogBodyButtonAccept, .cc-accept, .cookie-accept',
+    { timeout: 5000 }
+  );
+  console.log('Banner cookie chiuso.');
+  await page.waitForTimeout(1000);
+} catch (_) {
+  console.log('Nessun banner cookie trovato, procedo.');
+}
 
-// STEP 4
-console.log('STEP 4 - Inserimento email: ' + email);
+// STEP 3 - inserimento email
+console.log('STEP 3 - Inserimento email: ' + email);
 
 const emailInput = page.locator('input[type="email"]').first();
 await emailInput.waitFor({ state: 'visible', timeout: 15000 });
-
-// click nel campo
 await emailInput.click({ force: true });
-
-// svuota completamente il campo
 await emailInput.fill('');
 await emailInput.press('Control+A');
 await emailInput.press('Backspace');
-
-// scrive la mail
 await emailInput.type(email, { delay: 40 });
 
-// forza anche via JS il valore corretto
 await page.evaluate((val) => {
   const el = document.querySelector('input[type="email"]');
   if (el) {
@@ -191,7 +179,6 @@ await page.evaluate((val) => {
   }
 }, email);
 
-// controllo finale
 const insertedValue = await emailInput.inputValue();
 console.log('Valore presente nel campo email:', insertedValue);
 
@@ -199,16 +186,19 @@ if (insertedValue.trim().toLowerCase() !== email.trim().toLowerCase()) {
   throw new Error(`Email non inserita correttamente. Atteso: ${email}, trovato: ${insertedValue}`);
 }
 
-// STEP 5
-console.log('STEP 5 - Click INVIA CODICE VIA EMAIL...');
-
+// STEP 4 - click invia codice
+console.log('STEP 4 - Click INVIA CODICE VIA EMAIL...');
 const sendButton = page.locator('#otp-start-process');
-
 await sendButton.waitFor({ state: 'visible', timeout: 15000 });
-await sendButton.click();
+await sendButton.click({ force: true });
 
 const otpRequestTime = Date.now();
 await page.waitForTimeout(5000);
+
+// STEP 5 - lettura OTP
+console.log('STEP 5 - Lettura OTP da Gmail...');
+otp = await getOtpFromGmail(otpRequestTime);
+logEntry('OTP ricevuto: ' + otp);
 
 // STEP 6
 console.log('STEP 6 - Lettura OTP da Gmail...');
