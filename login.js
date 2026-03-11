@@ -129,14 +129,6 @@ async function sendNotification({ success, email, url, otp, error }) {
   });
   const page = await context.newPage();
   try {
-  // STEP 1
-console.log('STEP 1 - Caricamento we-wealth.com...');
-await page.goto('https://www.we-wealth.com', {
-  waitUntil: 'networkidle',
-  timeout: 60000
-});
-console.log('Pagina caricata, URL: ' + page.url());
-
 // STEP 1b - attesa e chiusura cookie
 console.log('Attendo fino a 10 secondi la comparsa del banner cookie...');
 try {
@@ -155,12 +147,15 @@ try {
 
 // STEP 2 - click personcina
 console.log('STEP 2 - Click pulsante Accedi...');
-const loginButton = page.locator('a.btn-accedi.otp-popup-button[title="Accedi"]');
+const loginButtons = page.locator('a.otp-popup-button');
+console.log('Numero pulsanti Accedi trovati:', await loginButtons.count());
+
+const loginButton = loginButtons.nth(1);
 await loginButton.waitFor({ state: 'visible', timeout: 15000 });
 await loginButton.click({ force: true });
 await page.waitForTimeout(2000);
 
-await page.waitForTimeout(2000);
+// controllo popup
 console.log('Popup aperto, verifico campo email...');
 await page.locator('input[type="email"]').first().waitFor({ state: 'visible', timeout: 15000 });
 
