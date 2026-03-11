@@ -129,7 +129,7 @@ async function sendNotification({ success, email, url, otp, error }) {
   });
   const page = await context.newPage();
   try {
-   // STEP 1
+  // STEP 1
 console.log('STEP 1 - Caricamento we-wealth.com...');
 await page.goto('https://www.we-wealth.com', {
   waitUntil: 'networkidle',
@@ -137,26 +137,32 @@ await page.goto('https://www.we-wealth.com', {
 });
 console.log('Pagina caricata, URL: ' + page.url());
 
-// STEP 2 - click personcina
-console.log('STEP 2 - Click pulsante Accedi...');
-const loginButton = page.locator('a.otp-popup-button');
-await loginButton.waitFor({ state: 'visible', timeout: 15000 });
-await loginButton.click({ force: true });
-
-await page.waitForTimeout(2000);
-
-// STEP 2b - chiusura cookie se presente
-console.log('STEP 2b - Chiusura banner cookie...');
+// STEP 1b - attesa e chiusura cookie
+console.log('Attendo fino a 10 secondi la comparsa del banner cookie...');
 try {
-  await page.click(
-    'button:has-text("Accetta"), button:has-text("Accetto"), button:has-text("Accept"), button:has-text("Chiudi"), button:has-text("OK"), #CybotCookiebotDialogBodyButtonAccept, .cc-accept, .cookie-accept',
-    { timeout: 5000 }
-  );
+  const cookieButton = page.locator(
+    'button:has-text("Accetta"), button:has-text("Accetto"), button:has-text("Accept"), button:has-text("Chiudi"), button:has-text("OK"), #CybotCookiebotDialogBodyButtonAccept, .cc-accept, .cookie-accept'
+  ).first();
+
+  await cookieButton.waitFor({ state: 'visible', timeout: 10000 });
+  await cookieButton.click();
+
   console.log('Banner cookie chiuso.');
   await page.waitForTimeout(1000);
 } catch (_) {
-  console.log('Nessun banner cookie trovato, procedo.');
+  console.log('Nessun banner cookie trovato entro 10 secondi, procedo.');
 }
+
+// STEP 2 - click personcina
+console.log('STEP 2 - Click pulsante Accedi...');
+const loginButton = page.locator('a.btn-accedi.otp-popup-button[title="Accedi"]');
+await loginButton.waitFor({ state: 'visible', timeout: 15000 });
+await loginButton.click({ force: true });
+await page.waitForTimeout(2000);
+
+await page.waitForTimeout(2000);
+console.log('Popup aperto, verifico campo email...');
+await page.locator('input[type="email"]').first().waitFor({ state: 'visible', timeout: 15000 });
 
 // STEP 3 - inserimento email
 console.log('STEP 3 - Inserimento email: ' + email);
