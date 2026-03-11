@@ -6,7 +6,7 @@ const puppeteer = require('puppeteer');
   // Navigate to we-wealth.com
   await page.goto('https://www.we-wealth.com');
   // Wait for 20 seconds (20000 ms)
-  await page.waitForTimeout(20000);
+  await new Promise(resolve => setTimeout(resolve, 20000));
   // Attempt to accept cookies by clicking a button containing 'Accetta' or 'Accept'
   try {
     await page.evaluate(() => {
