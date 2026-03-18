@@ -197,7 +197,7 @@ async function seguiAccountSuggeriti(page) {
   console.log(`Operazione completata. Account seguiti oggi: ${seguiti}`);
 }
 
-// Entry point
+// Entry point: home -> suggeriti -> follow
 (async () => {
   try {
     const browser = await chromium.launch({
@@ -211,6 +211,7 @@ async function seguiAccountSuggeriti(page) {
         'Chrome/120.0.0.0 Safari/537.36',
     });
 
+    // 1) Carica i cookie nel contesto
     const ok = await caricaCookies(context);
     if (!ok) {
       await browser.close();
@@ -218,6 +219,21 @@ async function seguiAccountSuggeriti(page) {
     }
 
     const page = await context.newPage();
+
+    // 2) Vai prima sulla home di Instagram usando questi cookie
+    console.log('Apro la home di Instagram per validare i cookie...');
+    await page.goto('https://www.instagram.com/', { timeout: 60000 });
+    await page.waitForTimeout(5000);
+
+    if (page.url().includes('accounts/login')) {
+      console.log('Errore: ancora sulla pagina di login, i cookie non funzionano.');
+      await browser.close();
+      return;
+    }
+
+    console.log('Login confermato dalla home. Ora apro la pagina dei suggerimenti...');
+
+    // 3) Da qui passa alla logica che apre la pagina suggerimenti e segue account
     await seguiAccountSuggeriti(page);
 
     await browser.close();
