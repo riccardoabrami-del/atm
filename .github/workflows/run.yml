@@ -2,7 +2,7 @@ name: Run BYNIGHTS every day
 
 on:
   schedule:
-        - cron: "30 9 * * *"  # 09:30 UTC = 10:30 CET (stesso orario di notizie - garantito)
+    - cron: "30 9 * * *"   # 09:30 UTC = 10:30 CET
   workflow_dispatch:
 
 jobs:
@@ -13,18 +13,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: '20'   # o la versione che usi nel progetto
 
-      - name: Install Playwright and dependencies
+      - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          python -m playwright install chromium
+          npm ci
+          npx playwright install --with-deps
 
       - name: Run BYNIGHTS script
         env:
           INSTAGRAM_COOKIES: ${{ secrets.INSTAGRAM_COOKIES }}
         run: |
-          python main.js
+          node main.js
