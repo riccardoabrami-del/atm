@@ -44,7 +44,7 @@ async function caricaCookies(context) {
       if (typeof c.httpOnly === 'boolean') cookie.httpOnly = c.httpOnly;
       if (typeof c.secure === 'boolean') cookie.secure = c.secure;
 
-      // sameSite: mappa solo valori validi per Playwright JS [web:53][web:55]
+      // sameSite: mappa solo valori validi per Playwright JS
       if (typeof c.sameSite === 'string') {
         const s = c.sameSite.toLowerCase();
         if (s === 'lax') cookie.sameSite = 'Lax';
@@ -88,21 +88,9 @@ async function chiudiPopup(page) {
 
 // Parte 3: trovare i bottoni Segui/Follow
 async function trovaBottoniSegui(page) {
-  const baseSelector =
-    '#mount_0_0_T8 > div > div > div.x9f619.x1n2onr6.x1ja2u2z > div > div > ' +
-    'div.x78zum5.xdt5ytf.x1t2pt76.x1n2onr6.x1ja2u2z.x10cihs4 > ' +
-    'div.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.' +
-    'x1c1uobl.x9f619.x16ye13r.xvbhtw8.x78zum5.x15mokao.x1ga7v0g.x16uus16.' +
-    'xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.' +
-    'x1qjc9v5.x1oa3qoh.x1qughib > div.x10o80wk.x14k21rp.xh8yej3 > section > ' +
-    'main > div > div.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xyri2b.' +
-    'x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.' +
-    'xwib8y2.x1y1aw1k.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.' +
-    'xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1 > div > div > div:nth-child(2) > ' +
-    'div > div > div > div:nth-child(3) > div > button';
-
-  const locatorSeg = page.locator(`${baseSelector}:has-text("Segui")`);
-  const locatorFollow = page.locator(`${baseSelector}:has-text("Follow")`);
+  // Selector semplificato: qualsiasi bottone con testo Segui/Follow
+  const locatorSeg = page.locator('button:has-text("Segui")');
+  const locatorFollow = page.locator('button:has-text("Follow")');
 
   const countSeg = await locatorSeg.count();
   const countFollow = await locatorFollow.count();
@@ -115,18 +103,13 @@ async function trovaBottoniSegui(page) {
   return bottoni;
 }
 
-// Parte 4: logica principale (segui suggeriti)
+// Parte 4: logica principale (segui suggeriti, restando su /explore/people/)
 async function seguiAccountSuggeriti(page) {
   console.log('Navigo sulla pagina degli account suggeriti...');
   await page.goto(SUGGERITI_URL, { timeout: 60000 });
   await page.waitForTimeout(5000);
 
-  if (page.url().includes('accounts/login')) {
-    console.log('Errore: non loggato. I cookie potrebbero essere scaduti.');
-    return;
-  }
-
-  console.log('Login confermato tramite cookie. Inizio follow...');
+  console.log('Inizio follow sulla pagina suggerimenti...');
   let seguiti = 0;
   let tentativiFalliti = 0;
 
@@ -137,12 +120,12 @@ async function seguiAccountSuggeriti(page) {
       const bottoni = await trovaBottoniSegui(page);
 
       if (bottoni.length === 0) {
-        console.log('Nessun bottone Segui trovato. Ricarico la pagina...');
+        console.log('Nessun bottone Segui trovato. Ricarico la pagina suggerimenti...');
         await page.goto(SUGGERITI_URL, { timeout: 60000 });
         await page.waitForTimeout(4000);
         tentativiFalliti++;
         if (tentativiFalliti >= MAX_TENTATIVI_FALLITI) {
-          console.log('Troppi tentativi falliti. Uscita.');
+          console.log('Troppi tentativi senza bottoni. Uscita.');
           break;
         }
         continue;
@@ -165,7 +148,8 @@ async function seguiAccountSuggeriti(page) {
           await sleep(2000);
 
           if (seguiti % 5 === 0) {
-            await page.reload();
+            console.log('Ricarico la pagina suggerimenti dopo 5 follow...');
+            await page.goto(SUGGERITI_URL, { timeout: 60000 });
             await page.waitForTimeout(4000);
           }
 
@@ -182,6 +166,7 @@ async function seguiAccountSuggeriti(page) {
         await page.keyboard.press('End');
         await sleep(2000);
         if (tentativiFalliti >= MAX_TENTATIVI_FALLITI) {
+          console.log('Troppi tentativi falliti di fila. Ricarico /explore/people/ ...');
           await page.goto(SUGGERITI_URL, { timeout: 60000 });
           await page.waitForTimeout(4000);
           tentativiFalliti = 0;
@@ -197,7 +182,7 @@ async function seguiAccountSuggeriti(page) {
   console.log(`Operazione completata. Account seguiti oggi: ${seguiti}`);
 }
 
-// Entry point: home -> suggeriti -> follow
+// Entry point: home -> suggeriti -> follow (restando sui suggeriti)
 (async () => {
   try {
     const browser = await chromium.launch({
@@ -220,20 +205,13 @@ async function seguiAccountSuggeriti(page) {
 
     const page = await context.newPage();
 
-    // 2) Vai prima sulla home di Instagram usando questi cookie
+    // 2) Vai sulla home una volta (solo per coerenza di sessione)
     console.log('Apro la home di Instagram per validare i cookie...');
     await page.goto('https://www.instagram.com/', { timeout: 60000 });
     await page.waitForTimeout(5000);
 
-    if (page.url().includes('accounts/login')) {
-      console.log('Errore: ancora sulla pagina di login, i cookie non funzionano.');
-      await browser.close();
-      return;
-    }
-
-    console.log('Login confermato dalla home. Ora apro la pagina dei suggerimenti...');
-
-    // 3) Da qui passa alla logica che apre la pagina suggerimenti e segue account
+    console.log('Ora apro direttamente la pagina dei suggerimenti...');
+    // 3) Da qui in poi resta sempre su /explore/people/
     await seguiAccountSuggeriti(page);
 
     await browser.close();
