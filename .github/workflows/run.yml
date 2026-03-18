@@ -16,11 +16,11 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'   # o la versione che usi nel progetto
+          node-version: '20'
 
       - name: Install dependencies
         run: |
-          npm ci
+          npm install
           npx playwright install --with-deps
 
       - name: Run BYNIGHTS script
@@ -28,3 +28,4 @@ jobs:
           INSTAGRAM_COOKIES: ${{ secrets.INSTAGRAM_COOKIES }}
         run: |
           node main.js
+
