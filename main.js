@@ -22,7 +22,6 @@ async function caricaCookies(context) {
   try {
     const cookiesList = JSON.parse(cookiesJson);
 
-    // Playwright JS vuole un array di oggetti cookie compatibili con addCookies.[web:53][web:55]
     const cookies = cookiesList.map(c => {
       const cookie = {
         name: c.name,
@@ -44,12 +43,19 @@ async function caricaCookies(context) {
 
       if (typeof c.httpOnly === 'boolean') cookie.httpOnly = c.httpOnly;
       if (typeof c.secure === 'boolean') cookie.secure = c.secure;
-      if (typeof c.sameSite === 'string') cookie.sameSite = c.sameSite;
+
+      // sameSite: mappa solo valori validi per Playwright JS [web:53][web:55]
+      if (typeof c.sameSite === 'string') {
+        const s = c.sameSite.toLowerCase();
+        if (s === 'lax') cookie.sameSite = 'Lax';
+        else if (s === 'strict') cookie.sameSite = 'Strict';
+        else if (s === 'none' || s === 'no_restriction') cookie.sameSite = 'None';
+      }
 
       return cookie;
     });
 
-    await context.addCookies(cookies); // tutti i cookie nel context.[web:53][web:55]
+    await context.addCookies(cookies);
     console.log(`Cookie caricati con successo (${cookies.length} cookie).`);
     return true;
   } catch (e) {
@@ -76,7 +82,7 @@ async function chiudiPopup(page) {
       }
     }
   } catch {
-    // ignore
+    // ignora errori dei popup
   }
 }
 
