@@ -1,31 +1,30 @@
-name: ATM Bot - We Wealth Registrazione
+name: Run BYNIGHTS every day
 
 on:
-  workflow_dispatch: # avvio manuale dal pulsante "Run workflow"
+  schedule:
+        - cron: "30 9 * * *"  # 09:30 UTC = 10:30 CET (stesso orario di notizie - garantito)
+  workflow_dispatch:
 
 jobs:
-  registra:
+  run-bynights:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout codice
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '20'
+          python-version: '3.11'
 
-      - name: Installa dipendenze
-        run: npm install playwright nodemailer imapflow mailparser puppeteer
+      - name: Install Playwright and dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install chromium
 
-      - name: Installa Chromium
-        run: npx playwright install chromium --with-deps
-
-      - name: Esegui login.js
+      - name: Run BYNIGHTS script
         env:
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          PLAYWRIGHT_HEADLESS: 'true'
-        run: node login.js
+          INSTAGRAM_COOKIES: ${{ secrets.INSTAGRAM_COOKIES }}
+        run: |
+          python main.js
